@@ -11,6 +11,7 @@ const {
   invalidateAppointmentCache
 } = require('../services/cacheService');
 const { publishEvent } = require('../events/eventPublisher');
+const logger = require('../observability/logger');
 
 const bookAppointment = async (req, res, next) => {
   const session = await mongoose.startSession();
@@ -52,7 +53,10 @@ const bookAppointment = async (req, res, next) => {
     await session.commitTransaction();
     await invalidateAppointmentCache();
 
-    console.log(`[saga][appointment-service] step=appointment.created appointmentId=${appointment[0]._id}`);
+    logger.info(
+      { appointmentId: appointment[0]._id, userId: appointment[0].userId },
+      '[saga][appointment-service] step=appointment.created'
+    );
     await publishEvent('appointment.created', {
       appointmentId: appointment[0]._id,
       userId: appointment[0].userId,

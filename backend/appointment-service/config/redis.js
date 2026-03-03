@@ -1,4 +1,5 @@
 const { createClient } = require('redis');
+const logger = require('../observability/logger');
 
 const DEFAULT_REDIS_URL = 'redis://redis:6379';
 const redisUrl = process.env.REDIS_URL || DEFAULT_REDIS_URL;
@@ -11,12 +12,12 @@ let redisAvailable = false;
 
 redisClient.on('ready', () => {
   redisAvailable = true;
-  console.log('Redis connected (appointment-service)');
+  logger.info('Redis connected (appointment-service)');
 });
 
 redisClient.on('error', (error) => {
   redisAvailable = false;
-  console.error('Redis error (appointment-service):', error.message);
+  logger.error({ error: error.message }, 'Redis error (appointment-service)');
 });
 
 const connectRedis = async () => {
@@ -26,7 +27,7 @@ const connectRedis = async () => {
     }
   } catch (error) {
     redisAvailable = false;
-    console.error('Redis connection failed. Falling back to MongoDB:', error.message);
+    logger.error({ error: error.message }, 'Redis connection failed. Falling back to MongoDB');
   }
 };
 

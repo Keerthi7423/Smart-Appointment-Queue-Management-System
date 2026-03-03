@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
@@ -8,10 +7,13 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { connectRedis, redisClient, isRedisAvailable } = require('./config/redis');
 const { isProduction, getAllowedOrigins, getMorganFormat } = require('./config/env');
+const logger = require('./observability/logger');
+const requestContextMiddleware = require('./middleware/requestContextMiddleware');
+const { metricsMiddleware, metricsHandler } = require('./observability/metrics');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const errorMiddleware = require('./middleware/errorMiddleware');
-const { initEventBus } = require('./events/eventBus');
+const { initEventBus, getEventBusHealth } = require('./events/eventBus');
 const { registerSagaListeners } = require('./events/eventListener');
 
 const runtimeEnv = process.env.NODE_ENV || 'development';
@@ -29,9 +31,9 @@ connectRedis();
   try {
     await initEventBus();
     registerSagaListeners();
-    console.log('[saga][appointment-service] saga listeners registered');
+    logger.info('[saga][appointment-service] saga listeners registered');
   } catch (error) {
-    console.error('[saga][appointment-service] event bus initialization failed:', error.message);
+    logger.error({ error: error.message }, '[saga][appointment-service] event bus initialization failed');
   }
 })();
 
@@ -55,12 +57,29 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(requestContextMiddleware);
+
 const morganFormat = getMorganFormat();
 if (morganFormat) {
-  app.use(morgan(morganFormat));
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      logger.info(
+        {
+          method: req.method,
+          path: req.originalUrl,
+          statusCode: res.statusCode,
+          durationMs: Date.now() - startedAt
+        },
+        'http.request'
+      );
+    });
+    next();
+  });
 }
 
 app.use(express.json());
+app.use(metricsMiddleware);
 
 app.use('/api', appointmentRoutes);
 app.use('/api', adminRoutes);
@@ -77,24 +96,32 @@ app.get('/health', (req, res) => {
     3: 'disconnecting'
   };
 
-  return res.status(200).json({
-    status: 'ok',
+  const mongoStatus = mongoStates[mongoose.connection.readyState] || 'unknown';
+  const redisStatus = isRedisAvailable() ? 'connected' : (redisClient.isOpen ? 'connecting' : 'disconnected');
+  const eventBus = getEventBusHealth();
+  const isOk = mongoose.connection.readyState === 1 && redisStatus === 'connected' && eventBus.initialized;
+
+  return res.status(isOk ? 200 : 503).json({
+    status: isOk ? 'ok' : 'degraded',
     service: 'appointment-service',
     environment: process.env.NODE_ENV || 'development',
     uptimeSeconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
     services: {
       api: 'up',
-      mongodb: mongoStates[mongoose.connection.readyState] || 'unknown',
-      redis: isRedisAvailable() ? 'connected' : (redisClient.isOpen ? 'connecting' : 'disconnected')
+      mongodb: mongoStatus,
+      redis: redisStatus,
+      eventBus
     }
   });
 });
+
+app.get('/metrics', metricsHandler);
 
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5002;
 
 app.listen(PORT, () => {
-  console.log(`Appointment service running on port ${PORT}`);
+  logger.info({ port: PORT }, 'Appointment service running');
 });

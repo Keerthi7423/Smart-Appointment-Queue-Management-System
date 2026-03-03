@@ -72,10 +72,14 @@ services:
       PORT: 5003
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      PAYMENT_MONGO_URI_DEV: ${PAYMENT_MONGO_URI_DEV:-mongodb://mongo:27017/smartQueueDB}
+      PAYMENT_MONGO_URI_PROD: ${PAYMENT_MONGO_URI_PROD:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       EVENT_BUS_CHANNEL: ${EVENT_BUS_CHANNEL:-smart-queue-events}
       SERVICE_NAME: payment-service
     depends_on:
+      mongo:
+        condition: service_healthy
       redis:
         condition: service_started
     networks:

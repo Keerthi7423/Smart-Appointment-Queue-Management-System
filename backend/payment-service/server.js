@@ -1,12 +1,16 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
 const { isProduction, getAllowedOrigins, getMorganFormat } = require('./config/env');
+const connectDB = require('./config/db');
+const logger = require('./observability/logger');
+const requestContextMiddleware = require('./middleware/requestContextMiddleware');
+const { metricsMiddleware, metricsHandler } = require('./observability/metrics');
 const paymentRoutes = require('./routes/paymentRoutes');
-const { initEventBus } = require('./events/eventBus');
+const { initEventBus, getEventBusHealth } = require('./events/eventBus');
 const { registerSagaListeners } = require('./events/sagaListener');
 
 const runtimeEnv = process.env.NODE_ENV || 'development';
@@ -19,11 +23,12 @@ if (fs.existsSync(envFile)) {
 
 (async () => {
   try {
+    await connectDB();
     await initEventBus();
     registerSagaListeners();
-    console.log('[saga][payment-service] saga listeners registered');
+    logger.info('[saga][payment-service] saga listeners registered');
   } catch (error) {
-    console.error('[saga][payment-service] event bus initialization failed:', error.message);
+    logger.error({ error: error.message }, '[saga][payment-service] event bus initialization failed');
   }
 })();
 
@@ -47,26 +52,63 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(requestContextMiddleware);
+
 const morganFormat = getMorganFormat();
 if (morganFormat) {
-  app.use(morgan(morganFormat));
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      logger.info(
+        {
+          method: req.method,
+          path: req.originalUrl,
+          statusCode: res.statusCode,
+          durationMs: Date.now() - startedAt
+        },
+        'http.request'
+      );
+    });
+    next();
+  });
 }
 
 app.use(express.json());
+app.use(metricsMiddleware);
 
 app.use('/api', paymentRoutes);
 app.use('/', paymentRoutes);
 
 app.get('/health', (req, res) => {
-  return res.status(200).json({
-    status: 'ok',
+  const mongoStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  const mongoStatus = mongoStates[mongoose.connection.readyState] || 'unknown';
+  const eventBus = getEventBusHealth();
+  const redisConnected = eventBus.publisherConnected && eventBus.subscriberConnected;
+  const isOk = mongoose.connection.readyState === 1 && redisConnected;
+
+  return res.status(isOk ? 200 : 503).json({
+    status: isOk ? 'ok' : 'degraded',
     service: 'payment-service',
     environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+    services: {
+      api: 'up',
+      mongodb: mongoStatus,
+      redis: redisConnected ? 'connected' : 'disconnected',
+      eventBus
+    }
   });
 });
 
+app.get('/metrics', metricsHandler);
+
 const PORT = process.env.PORT || 5003;
 app.listen(PORT, () => {
-  console.log(`Payment service running on port ${PORT}`);
+  logger.info({ port: PORT }, 'Payment service running');
 });

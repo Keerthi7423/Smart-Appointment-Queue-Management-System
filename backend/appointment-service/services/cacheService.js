@@ -1,4 +1,5 @@
 const { redisClient, isRedisAvailable } = require('../config/redis');
+const logger = require('../observability/logger');
 
 const CACHE_TTL_SECONDS = 60;
 
@@ -16,7 +17,7 @@ const getCache = async (key) => {
     const cachedValue = await redisClient.get(key);
     return cachedValue ? JSON.parse(cachedValue) : null;
   } catch (error) {
-    console.error(`Cache read failed for key "${key}":`, error.message);
+    logger.error({ key, error: error.message }, 'Cache read failed');
     return null;
   }
 };
@@ -29,7 +30,7 @@ const setCache = async (key, data, ttlInSeconds = CACHE_TTL_SECONDS) => {
   try {
     await redisClient.setEx(key, ttlInSeconds, JSON.stringify(data));
   } catch (error) {
-    console.error(`Cache write failed for key "${key}":`, error.message);
+    logger.error({ key, error: error.message }, 'Cache write failed');
   }
 };
 
@@ -46,7 +47,7 @@ const deleteCacheKeys = async (keys) => {
   try {
     await redisClient.del(validKeys);
   } catch (error) {
-    console.error('Cache invalidation failed:', error.message);
+    logger.error({ error: error.message }, 'Cache invalidation failed');
   }
 };
 

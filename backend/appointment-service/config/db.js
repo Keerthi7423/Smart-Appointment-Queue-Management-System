@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { getMongoUri, isProduction } = require('./env');
+const logger = require('../observability/logger');
 
 const DEFAULT_MONGO_URI = 'mongodb://mongo:27017/smartQueueDB';
 
@@ -8,14 +9,13 @@ const connectDB = async () => {
     const mongoUri = getMongoUri() || DEFAULT_MONGO_URI;
 
     if (isProduction && !process.env.APPOINTMENT_MONGO_URI_PROD && !process.env.MONGO_URI_PROD && !process.env.MONGO_URI) {
-      console.warn('APPOINTMENT_MONGO_URI_PROD is not set. Falling back to local/default Mongo URI.');
+      logger.warn('APPOINTMENT_MONGO_URI_PROD is not set. Falling back to local/default Mongo URI.');
     }
 
     await mongoose.connect(mongoUri);
-    console.log('MongoDB connected (appointment-service)');
+    logger.info('MongoDB connected (appointment-service)');
   } catch (error) {
-    console.error('MongoDB connection failed (appointment-service)');
-    console.error(error.message);
+    logger.error({ error: error.message }, 'MongoDB connection failed (appointment-service)');
     process.exit(1);
   }
 };
