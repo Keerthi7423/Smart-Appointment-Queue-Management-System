@@ -1,12 +1,14 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { isProduction, getAllowedOrigins, getMorganFormat } = require('./config/env');
+const logger = require('./observability/logger');
+const requestContextMiddleware = require('./middleware/requestContextMiddleware');
+const { metricsMiddleware, metricsHandler } = require('./observability/metrics');
 const authRoutes = require('./routes/authRoutes');
 const protectedRoutes = require('./routes/protectedRoutes');
 const errorMiddleware = require('./middleware/errorMiddleware');
@@ -41,12 +43,29 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(requestContextMiddleware);
+
 const morganFormat = getMorganFormat();
 if (morganFormat) {
-  app.use(morgan(morganFormat));
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      logger.info(
+        {
+          method: req.method,
+          path: req.originalUrl,
+          statusCode: res.statusCode,
+          durationMs: Date.now() - startedAt
+        },
+        'http.request'
+      );
+    });
+    next();
+  });
 }
 
 app.use(express.json());
+app.use(metricsMiddleware);
 
 app.use('/api/auth', authRoutes);
 app.use('/api', protectedRoutes);
@@ -63,23 +82,30 @@ app.get('/health', (req, res) => {
     3: 'disconnecting'
   };
 
-  return res.status(200).json({
-    status: 'ok',
+  const mongoStatus = mongoStates[mongoose.connection.readyState] || 'unknown';
+  const status = mongoose.connection.readyState === 1 ? 'ok' : 'degraded';
+  const httpStatus = status === 'ok' ? 200 : 503;
+
+  return res.status(httpStatus).json({
+    status,
     service: 'auth-service',
     environment: process.env.NODE_ENV || 'development',
     uptimeSeconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
     services: {
       api: 'up',
-      mongodb: mongoStates[mongoose.connection.readyState] || 'unknown'
+      mongodb: mongoStatus,
+      redis: 'not_configured'
     }
   });
 });
+
+app.get('/metrics', metricsHandler);
 
 app.use(errorMiddleware);
 
 const PORT = process.env.PORT || 5001;
 
 app.listen(PORT, () => {
-  console.log(`Auth service running on port ${PORT}`);
+  logger.info({ port: PORT }, 'Auth service running');
 });

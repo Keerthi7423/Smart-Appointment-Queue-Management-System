@@ -14,6 +14,12 @@ const parseCsv = (value) => {
 
 const getAllowedOrigins = () => parseCsv(process.env.CORS_ALLOWED_ORIGINS);
 
+const getMongoUri = () => {
+  const devUri = process.env.PAYMENT_MONGO_URI_DEV || process.env.MONGO_URI_DEV || process.env.MONGO_URI;
+  const prodUri = process.env.PAYMENT_MONGO_URI_PROD || process.env.MONGO_URI_PROD || process.env.MONGO_URI;
+  return isProduction ? prodUri : devUri;
+};
+
 const getMorganFormat = () => {
   const level = (process.env.LOG_LEVEL || '').toLowerCase();
 
@@ -30,6 +36,8 @@ const getMorganFormat = () => {
 
 module.exports = {
   isProduction,
+  isDevelopment,
   getAllowedOrigins,
+  getMongoUri,
   getMorganFormat
 };

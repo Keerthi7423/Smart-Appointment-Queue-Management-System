@@ -1,4 +1,7 @@
 const { createClient } = require('redis');
+const { randomUUID } = require('crypto');
+const logger = require('../observability/logger');
+const { runWithRequestContext, getRequestId } = require('../observability/requestContext');
 
 const CHANNEL = process.env.EVENT_BUS_CHANNEL || 'smart-queue-events';
 const SERVICE_NAME = process.env.SERVICE_NAME || 'payment-service';
@@ -17,11 +20,11 @@ const initEventBus = async () => {
   subscriber = publisher.duplicate();
 
   publisher.on('error', (error) => {
-    console.error(`[event-bus][${SERVICE_NAME}] publisher error:`, error.message);
+    logger.error({ error: error.message }, `[event-bus][${SERVICE_NAME}] publisher error`);
   });
 
   subscriber.on('error', (error) => {
-    console.error(`[event-bus][${SERVICE_NAME}] subscriber error:`, error.message);
+    logger.error({ error: error.message }, `[event-bus][${SERVICE_NAME}] subscriber error`);
   });
 
   await publisher.connect();
@@ -31,17 +34,20 @@ const initEventBus = async () => {
     try {
       const message = JSON.parse(rawMessage);
       const eventHandlers = handlers.get(message.event) || [];
+      const correlationId = message.correlationId || message?.headers?.['x-request-id'] || message.eventId;
 
-      for (const handler of eventHandlers) {
-        await handler(message);
-      }
+      await runWithRequestContext(correlationId, async () => {
+        for (const handler of eventHandlers) {
+          await handler(message);
+        }
+      });
     } catch (error) {
-      console.error(`[event-bus][${SERVICE_NAME}] message handling failed:`, error.message);
+      logger.error({ error: error.message }, `[event-bus][${SERVICE_NAME}] message handling failed`);
     }
   });
 
   initialized = true;
-  console.log(`[event-bus][${SERVICE_NAME}] listening on channel "${CHANNEL}"`);
+  logger.info(`[event-bus][${SERVICE_NAME}] listening on channel "${CHANNEL}"`);
 };
 
 const subscribeEvent = (eventName, handler) => {
@@ -55,6 +61,11 @@ const publishEvent = async (eventName, payload) => {
   }
 
   const message = {
+    eventId: randomUUID(),
+    correlationId: getRequestId() || null,
+    headers: {
+      'x-request-id': getRequestId() || null
+    },
     event: eventName,
     source: SERVICE_NAME,
     timestamp: new Date().toISOString(),
@@ -62,11 +73,18 @@ const publishEvent = async (eventName, payload) => {
   };
 
   await publisher.publish(CHANNEL, JSON.stringify(message));
-  console.log(`[saga][${SERVICE_NAME}] published ${eventName}`, JSON.stringify(payload));
+  logger.info({ eventName, eventId: message.eventId, correlationId: message.correlationId }, `[saga][${SERVICE_NAME}] published ${eventName}`);
 };
+
+const getEventBusHealth = () => ({
+  initialized,
+  publisherConnected: Boolean(publisher?.isOpen),
+  subscriberConnected: Boolean(subscriber?.isOpen)
+});
 
 module.exports = {
   initEventBus,
   subscribeEvent,
-  publishEvent
+  publishEvent,
+  getEventBusHealth
 };
