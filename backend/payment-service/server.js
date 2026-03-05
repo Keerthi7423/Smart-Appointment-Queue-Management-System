@@ -12,6 +12,7 @@ const { metricsMiddleware, metricsHandler } = require('./observability/metrics')
 const paymentRoutes = require('./routes/paymentRoutes');
 const { initEventBus, getEventBusHealth } = require('./events/eventBus');
 const { registerSagaListeners } = require('./events/sagaListener');
+const { registerNotificationListeners } = require('./events/notificationHandler');
 
 const runtimeEnv = process.env.NODE_ENV || 'development';
 const envFile = path.join(__dirname, `.env.${runtimeEnv}`);
@@ -26,7 +27,9 @@ if (fs.existsSync(envFile)) {
     await connectDB();
     await initEventBus();
     registerSagaListeners();
+    registerNotificationListeners();
     logger.info('[saga][payment-service] saga listeners registered');
+    logger.info('[notification][payment-service] listeners registered');
   } catch (error) {
     logger.error({ error: error.message }, '[saga][payment-service] event bus initialization failed');
   }
@@ -88,8 +91,8 @@ app.get('/health', (req, res) => {
   };
   const mongoStatus = mongoStates[mongoose.connection.readyState] || 'unknown';
   const eventBus = getEventBusHealth();
-  const redisConnected = eventBus.publisherConnected && eventBus.subscriberConnected;
-  const isOk = mongoose.connection.readyState === 1 && redisConnected;
+  const messagingConnected = eventBus.publisherConnected && eventBus.consumerConnected;
+  const isOk = mongoose.connection.readyState === 1 && messagingConnected;
 
   return res.status(isOk ? 200 : 503).json({
     status: isOk ? 'ok' : 'degraded',
@@ -100,7 +103,7 @@ app.get('/health', (req, res) => {
     services: {
       api: 'up',
       mongodb: mongoStatus,
-      redis: redisConnected ? 'connected' : 'disconnected',
+      messaging: messagingConnected ? 'connected' : 'disconnected',
       eventBus
     }
   });

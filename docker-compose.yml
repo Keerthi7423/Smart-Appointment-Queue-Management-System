@@ -51,13 +51,16 @@ services:
       APPOINTMENT_MONGO_URI_DEV: ${APPOINTMENT_MONGO_URI_DEV:-mongodb://mongo:27017/smartQueueDB}
       APPOINTMENT_MONGO_URI_PROD: ${APPOINTMENT_MONGO_URI_PROD:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      EVENT_BUS_CHANNEL: ${EVENT_BUS_CHANNEL:-smart-queue-events}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+      EVENT_BUS_EXCHANGE: ${EVENT_BUS_EXCHANGE:-smart.queue.events}
       SERVICE_NAME: appointment-service
     depends_on:
       mongo:
         condition: service_healthy
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - smart-queue-network
     restart: always
@@ -75,13 +78,14 @@ services:
       PAYMENT_MONGO_URI_DEV: ${PAYMENT_MONGO_URI_DEV:-mongodb://mongo:27017/smartQueueDB}
       PAYMENT_MONGO_URI_PROD: ${PAYMENT_MONGO_URI_PROD:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      EVENT_BUS_CHANNEL: ${EVENT_BUS_CHANNEL:-smart-queue-events}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+      EVENT_BUS_EXCHANGE: ${EVENT_BUS_EXCHANGE:-smart.queue.events}
       SERVICE_NAME: payment-service
     depends_on:
       mongo:
         condition: service_healthy
-      redis:
-        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - smart-queue-network
     restart: always
@@ -113,6 +117,22 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
+    networks:
+      - smart-queue-network
+    restart: always
+
+  rabbitmq:
+    container_name: smart-queue-rabbitmq
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - smart-queue-network
     restart: always
