@@ -6,8 +6,9 @@ Distributed backend platform for appointment booking with authentication, paymen
 
 ```mermaid
 flowchart LR
-    C[Client Apps<br/>Web/Admin] --> G[Nginx API Gateway]
+    C[Client Apps<br/>Web/Admin] --> N[Nginx Edge Ingress]
 
+    N --> G[Express Gateway Service]
     G --> A[Auth Service]
     G --> AP[Appointment Service]
     G --> P[Payment Service]
@@ -32,8 +33,17 @@ flowchart LR
 ## 2) System Components Explanation
 
 ### API Gateway
-- `nginx` routes paths to internal services.
+- `gateway-service` is an Express-based API gateway.
+- `nginx` stays as the external ingress/edge proxy and forwards API traffic to the gateway.
 - External entrypoint: `http://localhost:8080` (Docker Compose) or NodePort `30080` (Kubernetes).
+- Gateway routes:
+  - `/api/auth` -> `auth-service`
+  - `/api/appointments` -> `appointment-service`
+  - `/api/payments` -> `payment-service` (`/api/pay` downstream rewrite for compatibility)
+- Gateway middleware:
+  - request logging
+  - 100 requests/minute rate limiting
+  - JWT/authorization header forwarding to downstream services
 
 ### `auth-service`
 - JWT-based register/login/profile endpoints.
@@ -60,7 +70,7 @@ flowchart LR
 
 ## 3) Scalability Strategy
 
-- Horizontal scaling through Kubernetes Deployments (`replicas: 2` for core services and gateway).
+- Horizontal scaling through Kubernetes Deployments (`replicas: 2` for core services, gateway, and ingress).
 - Stateless service processes allow independent scaling by load profile.
 - Isolated services prevent one domain's traffic spikes from saturating others.
 - Queue-driven decoupling protects user API latency from downstream payment timing.
@@ -105,6 +115,7 @@ Kubernetes manifests under `k8s/` include:
   - `auth-service.yaml`
   - `appointment-service.yaml`
   - `payment-service.yaml`
+  - `gateway-service.yaml`
   - `nginx.yaml`
 - Data stores:
   - `mongo.yaml` (with PVC and health checks)
@@ -179,7 +190,7 @@ Verify services:
 ```bash
 docker compose ps
 curl http://localhost:8080/api
-curl http://localhost:8080/api/pay
+curl http://localhost:8080/api/payments
 ```
 
 Run automated flow verification:
@@ -204,6 +215,7 @@ Services:
 - `backend/auth-service`
 - `backend/appointment-service`
 - `backend/payment-service`
+- `backend/gateway-service`
 
 ## 10) Interview Talking Points
 
@@ -231,6 +243,7 @@ Services:
 |- backend/
 |  |- auth-service/
 |  |- appointment-service/
+|  |- gateway-service/
 |  `- payment-service/
 |- docker/
 |- docs/

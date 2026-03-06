@@ -10,5 +10,5 @@ resources:
   - auth-service.yaml
   - appointment-service.yaml
   - payment-service.yaml
+  - gateway-service.yaml
   - nginx.yaml
-
