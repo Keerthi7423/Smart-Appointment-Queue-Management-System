@@ -9,12 +9,14 @@ const {
   updateAppointmentStatus
 } = require('../controllers/appointmentController');
 
+const { standardLimiter } = require('../middleware/rateLimitMiddleware');
+
 const router = express.Router();
 
-router.post('/appointments', authMiddleware, validateBookingInput, bookAppointment);
-router.get('/appointments/my', authMiddleware, getMyAppointments);
-router.get('/appointments/user', authMiddleware, getMyAppointments);
-router.get('/appointments/today', authMiddleware, roleMiddleware('staff', 'admin'), getTodayAppointments);
-router.put('/appointments/:id', authMiddleware, roleMiddleware('staff'), updateAppointmentStatus);
+router.post('/appointments', authMiddleware, standardLimiter, validateBookingInput, bookAppointment);
+router.get('/appointments/my', authMiddleware, standardLimiter, getMyAppointments);
+router.get('/appointments/user', authMiddleware, standardLimiter, getMyAppointments);
+router.get('/appointments/today', authMiddleware, standardLimiter, roleMiddleware('staff', 'admin'), getTodayAppointments);
+router.put('/appointments/:id', authMiddleware, standardLimiter, roleMiddleware('staff'), updateAppointmentStatus);
 
 module.exports = router;

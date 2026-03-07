@@ -60,6 +60,17 @@ const updateStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body;
 
+    // Validate Status against allowed values
+    const allowedStatuses = ['waiting', 'serving', 'completed', 'cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    // Validate Mongoose ObjectId to prevent NoSQL injection/errors
+    if (!require('mongoose').Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid appointment ID format' });
+    }
+
     const appointment = await Appointment.findByIdAndUpdate(
       id,
       { status },
