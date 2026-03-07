@@ -1,115 +1,149 @@
 "use client";
 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import StatsCard from '@/components/StatsCard';
-import SidebarFilters from '@/components/SidebarFilters';
-import OrderCard from '@/components/OrderCard';
-import { FilePlus, Timer, ConciergeBell, XCircle } from 'lucide-react';
+import AppointmentTable from '@/components/AppointmentTable';
+import { getToken } from '@/utils/auth';
+import { CalendarCheck2, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
-    // Mock Data for Dashboard
-    const stats = [
-        { title: 'New Orders', value: '1,245', icon: FilePlus, color: 'bg-blue-500/20 text-blue-400' },
-        { title: 'On Progress', value: '430', icon: Timer, color: 'bg-amber-500/20 text-amber-400' },
-        { title: 'Ready to Serve', value: '25', icon: ConciergeBell, color: 'bg-emerald-500/20 text-emerald-400' },
-        { title: 'Cancelled Orders', value: '18', icon: XCircle, color: 'bg-rose-500/20 text-rose-400' },
-    ];
+    const router = useRouter();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [appointments, setAppointments] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [stats, setStats] = useState({
+        upcoming: 0,
+        completed: 0,
+        cancelled: 0
+    });
 
-    const orders = [
+    useEffect(() => {
+        const token = getToken();
+        if (!token) {
+            router.push('/login');
+        } else {
+            setIsAuthenticated(true);
+            fetchAppointments(token);
+        }
+    }, [router]);
+
+    const fetchAppointments = async (token) => {
+        try {
+            setIsLoading(true);
+            const res = await fetch('/api/appointments/user', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!res.ok) throw new Error('Failed to fetch appointments');
+
+            const result = await res.json();
+            const data = result.data || result.appointments || [];
+
+            setAppointments(data);
+
+            // Calculate stats
+            const upcoming = data.filter(a => a.status === 'waiting' || a.status === 'pending' || a.status === 'serving').length;
+            const completed = data.filter(a => a.status === 'completed').length;
+            const cancelled = data.filter(a => a.status === 'cancelled').length;
+
+            setStats({ upcoming, completed, cancelled });
+        } catch (err) {
+            console.error('API Error:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-[#0f172a] flex justify-center items-center">
+                <Loader2 className="animate-spin text-emerald-500" size={48} />
+            </div>
+        );
+    }
+
+    const statsConfig = [
         {
-            id: '8A92D7',
-            user: { name: 'Eleanor Pena', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026704d' },
-            room: '402',
-            status: 'New',
-            items: [{ qty: 2, name: 'Truffle Pasta' }, { qty: 1, name: 'Caesar Salad' }],
-            total: 58.50,
+            title: 'Upcoming Appointments',
+            value: stats.upcoming,
+            icon: CalendarCheck2,
+            color: 'bg-indigo-500/20 text-indigo-400'
         },
         {
-            id: '2B14C9',
-            user: { name: 'Arlene McCoy', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026703d' },
-            room: '105',
-            status: 'On progress',
-            items: [{ qty: 1, name: 'Ribeye Steak' }, { qty: 2, name: 'Cocktails' }],
-            total: 120.00,
+            title: 'Completed Appointments',
+            value: stats.completed,
+            icon: CheckCircle,
+            color: 'bg-emerald-500/20 text-emerald-400'
         },
         {
-            id: '9D62F1',
-            user: { name: 'Wade Warren', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026024d' },
-            room: '210',
-            status: 'Ready to serve',
-            items: [{ qty: 3, name: 'Vegan Burger' }],
-            total: 45.00,
-        },
-        {
-            id: '4C55B3',
-            user: { name: 'Jane Cooper', avatar: 'https://i.pravatar.cc/150?u=a04258114e29026702d' },
-            room: '304',
-            status: 'Cancelled',
-            items: [{ qty: 1, name: 'Margherita Pizza' }],
-            total: 18.00,
-        },
-        {
-            id: '7E41A2',
-            user: { name: 'Cody Fisher', avatar: 'https://i.pravatar.cc/150?u=a048581f4e29026701d' },
-            room: '501',
-            status: 'New',
-            items: [{ qty: 2, name: 'Grilled Salmon' }, { qty: 1, name: 'White Wine' }],
-            total: 89.00,
-        },
-        {
-            id: '6F32B8',
-            user: { name: 'Robert Fox', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026700d' },
-            room: '112',
-            status: 'On progress',
-            items: [{ qty: 1, name: 'Lobster Bisque' }],
-            total: 32.50,
+            title: 'Cancelled Appointments',
+            value: stats.cancelled,
+            icon: XCircle,
+            color: 'bg-rose-500/20 text-rose-400'
         },
     ];
 
     return (
         <div className="min-h-screen bg-[#0f172a] text-gray-100 p-6 font-sans">
-            <div className="max-w-7xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-8">
 
-                {/* Top Navbar */}
                 <Navbar />
 
-                {/* Stats Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
-                    {stats.map((stat, idx) => (
-                        <StatsCard
-                            key={idx}
-                            title={stat.title}
-                            value={stat.value}
-                            icon={stat.icon}
-                            color={stat.color}
-                            delay={idx * 0.1}
-                        />
-                    ))}
-                </div>
-
-                {/* Main Content Area */}
-                <div className="flex flex-col lg:flex-row gap-8 pt-6">
-
-                    {/* Sidebar */}
-                    <div className="w-full lg:w-64 flex-shrink-0">
-                        <SidebarFilters />
+                <div className="pt-4">
+                    <div className="flex justify-between items-end mb-8">
+                        <div>
+                            <h1 className="text-3xl font-bold text-white tracking-tight">My Appointments</h1>
+                            <p className="text-gray-400 mt-2">Manage your bookings and track your queue status in real-time.</p>
+                        </div>
+                        <button
+                            onClick={() => router.push('/appointments')}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                        >
+                            Book New
+                        </button>
                     </div>
 
-                    {/* Order Cards Grid */}
-                    <div className="flex-1">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold tracking-tight text-white">Order List</h2>
-                            <span className="text-gray-400 text-sm">Showing {orders.length} results</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                            {orders.map((order, idx) => (
-                                <OrderCard key={order.id} order={order} delay={idx * 0.1} />
-                            ))}
-                        </div>
+                    {/* Stats Rows */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        {statsConfig.map((stat, idx) => (
+                            <StatsCard
+                                key={idx}
+                                title={stat.title}
+                                value={stat.value}
+                                icon={stat.icon}
+                                color={stat.color}
+                                delay={idx * 0.1}
+                            />
+                        ))}
                     </div>
 
+                    {/* Appointment Lists */}
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-white flex items-center">
+                                <AlertCircle className="mr-2 text-indigo-400" size={20} />
+                                Recent Bookings
+                            </h2>
+                            <span className="text-gray-500 text-sm font-medium">
+                                {appointments.length} total bookings found
+                            </span>
+                        </div>
+
+                        {isLoading ? (
+                            <div className="bg-[#1e293b] rounded-xl p-20 flex flex-col items-center justify-center border border-gray-800 shadow-xl">
+                                <Loader2 className="animate-spin text-indigo-500 mb-4" size={40} />
+                                <p className="text-gray-400 font-medium tracking-wide">Retrieving your data...</p>
+                            </div>
+                        ) : (
+                            <AppointmentTable appointments={appointments} />
+                        )}
+                    </div>
                 </div>
+
             </div>
         </div>
     );

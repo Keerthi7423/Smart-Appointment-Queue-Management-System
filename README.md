@@ -2,7 +2,7 @@
 
 Distributed backend platform for appointment booking with authentication, payment orchestration, Saga-based consistency, and production-oriented deployment primitives (Docker, Kubernetes, CI/CD, observability).
 
-## 1) High-Level Architecture Overview
+## 1) High-Level 1 Architecture Overview
 
 ```mermaid
 flowchart LR
