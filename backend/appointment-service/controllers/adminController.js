@@ -40,4 +40,54 @@ const adminDashboard = async (req, res, next) => {
   }
 };
 
-module.exports = { adminDashboard };
+const getAllAppointments = async (req, res, next) => {
+  try {
+    const appointments = await Appointment.find()
+      .populate('userId', 'name email')
+      .sort({ date: -1, createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: appointments
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updateStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate Status against allowed values
+    const allowedStatuses = ['waiting', 'serving', 'completed', 'cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    // Validate Mongoose ObjectId to prevent NoSQL injection/errors
+    if (!require('mongoose').Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid appointment ID format' });
+    }
+
+    const appointment = await Appointment.findOneAndUpdate(
+      { _id: { $eq: id } },
+      { $set: { status: status } },
+      { new: true, runValidators: true }
+    );
+
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: appointment
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = { adminDashboard, getAllAppointments, updateStatus };

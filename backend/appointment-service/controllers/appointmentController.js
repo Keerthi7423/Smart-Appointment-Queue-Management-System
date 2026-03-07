@@ -14,7 +14,6 @@ const { publishEvent } = require('../events/eventPublisher');
 const logger = require('../observability/logger');
 
 const bookAppointment = async (req, res, next) => {
-  const session = await mongoose.startSession();
   try {
     if (!req.user || !req.user.id) {
       throw new AppError('Unauthorized', 401);
@@ -24,64 +23,50 @@ const bookAppointment = async (req, res, next) => {
     const appointmentDate = new Date(date);
     const { startOfDay, endOfDay } = getDateRange(appointmentDate);
 
-    session.startTransaction();
-
     const existingAppointment = await Appointment.findOne({
-      userId: req.user.id,
+      userId: { $eq: req.user.id },
       date: { $gte: startOfDay, $lte: endOfDay },
-      timeSlot
-    }).session(session);
+      timeSlot: { $eq: timeSlot }
+    });
 
     if (existingAppointment) {
       throw new AppError('You already booked this time slot for this date', 400);
     }
 
-    const queueNumber = await generateQueueNumber(appointmentDate, timeSlot, session);
+    const queueNumber = await generateQueueNumber(appointmentDate, timeSlot);
 
-    const appointment = await Appointment.create(
-      [
-        {
-          userId: req.user.id,
-          date: startOfDay,
-          timeSlot,
-          queueNumber
-        }
-      ],
-      { session }
-    );
+    const appointment = await Appointment.create({
+      userId: req.user.id,
+      date: startOfDay,
+      timeSlot,
+      queueNumber
+    });
 
-    await session.commitTransaction();
     await invalidateAppointmentCache();
 
     logger.info(
-      { appointmentId: appointment[0]._id, userId: appointment[0].userId },
+      { appointmentId: appointment._id, userId: appointment.userId },
       '[saga][appointment-service] step=appointment.created'
     );
     await publishEvent('appointment.created', {
-      appointmentId: appointment[0]._id,
-      userId: appointment[0].userId,
-      date: appointment[0].date,
-      timeSlot: appointment[0].timeSlot,
-      queueNumber: appointment[0].queueNumber,
-      createdAt: appointment[0].createdAt
+      appointmentId: appointment._id,
+      userId: appointment.userId,
+      date: appointment.date,
+      timeSlot: appointment.timeSlot,
+      queueNumber: appointment.queueNumber,
+      createdAt: appointment.createdAt
     });
 
     return res.status(201).json({
       success: true,
-      data: appointment[0]
+      data: appointment
     });
   } catch (error) {
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
-
     if (error.code === 11000) {
       return next(new AppError('Duplicate booking detected. Please retry.', 409));
     }
 
     return next(error);
-  } finally {
-    session.endSession();
   }
 };
 
@@ -91,7 +76,7 @@ const getMyAppointments = async (req, res, next) => {
       throw new AppError('Unauthorized', 401);
     }
 
-    const appointments = await Appointment.find({ userId: req.user.id }).sort({
+    const appointments = await Appointment.find({ userId: { $eq: req.user.id } }).sort({
       date: -1,
       createdAt: -1
     });
@@ -144,9 +129,14 @@ const updateAppointmentStatus = async (req, res, next) => {
       throw new AppError('Invalid status value', 400);
     }
 
-    const updatedAppointment = await Appointment.findByIdAndUpdate(
-      id,
-      { status },
+    // Validate Mongoose ObjectId to prevent NoSQL injection/errors
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid appointment ID format', 400);
+    }
+
+    const updatedAppointment = await Appointment.findOneAndUpdate(
+      { _id: { $eq: id } },
+      { $set: { status: status } },
       { new: true, runValidators: true }
     );
 
