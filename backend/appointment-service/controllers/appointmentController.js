@@ -24,9 +24,9 @@ const bookAppointment = async (req, res, next) => {
     const { startOfDay, endOfDay } = getDateRange(appointmentDate);
 
     const existingAppointment = await Appointment.findOne({
-      userId: req.user.id,
+      userId: { $eq: req.user.id },
       date: { $gte: startOfDay, $lte: endOfDay },
-      timeSlot
+      timeSlot: { $eq: timeSlot }
     });
 
     if (existingAppointment) {
@@ -76,7 +76,7 @@ const getMyAppointments = async (req, res, next) => {
       throw new AppError('Unauthorized', 401);
     }
 
-    const appointments = await Appointment.find({ userId: req.user.id }).sort({
+    const appointments = await Appointment.find({ userId: { $eq: req.user.id } }).sort({
       date: -1,
       createdAt: -1
     });
@@ -129,9 +129,14 @@ const updateAppointmentStatus = async (req, res, next) => {
       throw new AppError('Invalid status value', 400);
     }
 
-    const updatedAppointment = await Appointment.findByIdAndUpdate(
-      id,
-      { status },
+    // Validate Mongoose ObjectId to prevent NoSQL injection/errors
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('Invalid appointment ID format', 400);
+    }
+
+    const updatedAppointment = await Appointment.findOneAndUpdate(
+      { _id: { $eq: id } },
+      { $set: { status: status } },
       { new: true, runValidators: true }
     );
 

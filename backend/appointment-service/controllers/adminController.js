@@ -71,9 +71,9 @@ const updateStatus = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid appointment ID format' });
     }
 
-    const appointment = await Appointment.findByIdAndUpdate(
-      id,
-      { status },
+    const appointment = await Appointment.findOneAndUpdate(
+      { _id: { $eq: id } },
+      { $set: { status: status } },
       { new: true, runValidators: true }
     );
 
