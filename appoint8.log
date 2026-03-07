@@ -1,0 +1,10 @@
+﻿{"level":30,"time":"2026-03-07T17:36:39.311Z","service":"appointment-service","msg":"MongoDB connected (appointment-service)"}
+{"level":30,"time":"2026-03-07T17:50:47.462Z","service":"appointment-service","requestId":"8f6b7fc3-58e2-4e6c-adf3-1b2383db66db","method":"POST","path":"/api/appointments","statusCode":500,"durationMs":68,"msg":"http.request"}
+{"level":30,"time":"2026-03-07T17:51:23.586Z","service":"appointment-service","requestId":"6002037c-b499-42ce-aee0-490a59249814","method":"POST","path":"/api/appointments","statusCode":500,"durationMs":7,"msg":"http.request"}
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ≡ƒöÉ encrypt with Dotenvx: https://dotenvx.com
+{"level":30,"time":"2026-03-07T17:53:43.699Z","service":"appointment-service","port":"5002","msg":"Appointment service running"}
+{"level":30,"time":"2026-03-07T17:53:43.715Z","service":"appointment-service","msg":"Redis connected (appointment-service)"}
+{"level":30,"time":"2026-03-07T17:53:43.722Z","service":"appointment-service","msg":"MongoDB connected (appointment-service)"}
+{"level":30,"time":"2026-03-07T17:53:43.830Z","service":"appointment-service","queueName":"appointment-service.events","routingPatterns":["#"],"deadLetterQueue":"appointment-service.events.dlq","msg":"[messaging][appointment-service] consumer started"}
+{"level":30,"time":"2026-03-07T17:53:43.830Z","service":"appointment-service","exchange":"smart.queue.events","queue":"appointment-service.events","msg":"[event-bus][appointment-service] initialized with RabbitMQ"}
+{"level":30,"time":"2026-03-07T17:53:43.830Z","service":"appointment-service","msg":"[saga][appointment-service] saga listeners registered"}

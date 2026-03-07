@@ -112,13 +112,13 @@ services:
     container_name: smart-queue-mongo
     image: mongo:7
     ports:
-      - "27017:27017"
+      - "27018:27017"
     environment:
       MONGO_INITDB_DATABASE: smartQueueDB
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -132,7 +132,7 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - redis_data:/data
     networks:
@@ -146,7 +146,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -158,6 +158,7 @@ services:
 volumes:
   mongo_data:
   redis_data:
+
 
 networks:
   smart-queue-network:

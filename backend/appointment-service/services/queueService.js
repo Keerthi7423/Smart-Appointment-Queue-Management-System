@@ -20,7 +20,7 @@ const generateQueueNumber = async (date, timeSlot, session = null) => {
   const count = await Appointment.countDocuments({
     date: { $gte: startOfDay, $lte: endOfDay },
     timeSlot
-  }).session(session);
+  });
 
   if (count >= SLOT_CAPACITY) {
     throw new AppError('Slot Full', 400);
